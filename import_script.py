@@ -84,7 +84,9 @@ for fileListMapping in configFile['file_list_mapping']:
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
         # FOR TEST RUN ONLY + 1 since we start with ZERO
-        TESTING_LIMIT_PER_SHEET = 0
+        TESTING_LIMIT_PER_SHEET = 1
+        # set a count for success for each sheet
+        successCount = 0
 
         ## set a log file
         logFile = open ("import-logs/" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower().replace("xls","txt")), "w")
@@ -146,9 +148,6 @@ for fileListMapping in configFile['file_list_mapping']:
                                     },
                                 ]
 
-        # set a count for success for each sheet
-        successCount = 0
-
         # now loop
         for row in range(0,len(importFile)):
 
@@ -186,16 +185,28 @@ for fileListMapping in configFile['file_list_mapping']:
             # format description!!!
             description = ""
             for fieldCol in descriptionArrangement:
-                description += "" if fieldCol['title'] == "Summary" else str("---\n") 
-                description += "" if fieldCol['title'] == "Summary" else str("# " + fieldCol['title']) + "\n\n"
+                # this flag make sure in each sub we have content if it changes to True it means we have else it will just stay false
+                checkSubListDescription = False
+                descriptionGroup = ""
+                descriptionGroup += "" if fieldCol['title'] == "Summary" else str("---\n") 
+                descriptionGroup += "" if fieldCol['title'] == "Summary" else str("# " + fieldCol['title']) + "\n\n"
                 for fieldContent in fieldCol['list']:
                     try:
-                        description += str("**" + fieldContent.replace("_", " ").replace("."," ").title()) + ":** " 
-                        description += "N/A \n\n" if pd.isna(importFile[fieldContent][row]) else str(importFile[fieldContent][row]).strip() + "\n\n"  
+                        if not pd.isna(importFile[fieldContent][row]):
+                            checkSubListDescription = True
+                            descriptionGroup += str("**" + fieldContent.replace("_", " ").replace("."," ").title()) + ":** " + str(importFile[fieldContent][row]).strip() + "\n\n"
                     except:
                         print("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION.")
                         logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
                         pass
+                    
+                # do we have any atleast one value?
+                if checkSubListDescription:
+                    # push the data
+                    description += descriptionGroup
+                else:
+                    print("[ROW #"+ str(row) + "]: It seems like the " + str(fieldCol['title']) + " Section for description data all empty. Ignoring from adding it on the DESCRIPTION.")
+                    logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldCol['title']) + " Section for description data all empty. Ignoring from adding it on the DESCRIPTION. \n")
 
             # format task name!!!
             taskName = "#" + str(importFile["Job #"][row]) + " - " + str(importFile["Job Name"][row])
@@ -206,7 +217,7 @@ for fileListMapping in configFile['file_list_mapping']:
                 "markdown_description": str(description),
                 "due_date": int(importFile["Due Date"][row].timestamp() * 1000),
                 "custom_fields": cFieldDDPayload,
-                "tags": ["script-testing"],
+                "tags": ["script-testing-2"],
                 "status":"CLOSED"
             }
 
