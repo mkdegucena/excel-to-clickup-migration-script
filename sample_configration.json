@@ -1,0 +1,23 @@
+{
+    "base_url":"https://api.clickup.com/api/v2/",
+    "api_key":"{{api_key}}",
+    "file_list_mapping": [
+        { 
+            "list_id":"{{list_id}}",
+            "file_name":"{{file_name}}",
+            "file_path":"{{file_path}}"
+        }
+    ],
+    "custom_field_dropdown": [
+        {
+            "header_name_on_excel":"{{header_name_on_excel}}",
+            "cf_id":"{{custom_field_id}}"
+        }
+    ],
+    "custom_field": [
+        {
+            "header_name_on_excel":"{{header_name_on_excel}}",
+            "cf_id":"{{custom_field_id}}"
+        }
+    ]
+}
