@@ -84,7 +84,7 @@ for fileListMapping in configFile['file_list_mapping']:
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
         # FOR TEST RUN ONLY + 1 since we start with ZERO
-        TESTING_LIMIT_PER_SHEET = 39
+        TESTING_LIMIT_PER_SHEET = 49
         # set a count for success for each sheet
         successCount = 0
 
@@ -166,7 +166,7 @@ for fileListMapping in configFile['file_list_mapping']:
                 else:
                     logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cFieldDD['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cFieldDD['cf_id'] + " as EMPTY. \n"))
 
-                # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push the payload
+                # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
                 if cFieldDDIndex:
                      # push
                     cFieldDDPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDIndex})
@@ -176,11 +176,12 @@ for fileListMapping in configFile['file_list_mapping']:
             for cField in configFile['custom_field']:
                     try:
                         cfValue =  "" if pd.isna(importFile[cField['header_name_on_excel']][row]) else str(importFile[cField['header_name_on_excel']][row])
-                        cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
+                        # getting error {'err': 'Value is not a valid URL', 'ECODE': 'FIELD_010'} to prevent just don't push as part of the payload
+                        if cfValue:
+                            cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
                     except:
                         #if we seems not to found it on the column just set the value to empty
                         logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cField['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cField['cf_id'] + " as EMPTY. \n"))
-                        cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  ""})
                         pass
 
             # format description!!!
@@ -222,7 +223,6 @@ for fileListMapping in configFile['file_list_mapping']:
                 "tags": ["migration-test-data"],
                 "status":"CLOSED"
             }
-
 
             # post request
             taskPostResponse = requests.post(url + "list/" + fileListMapping['list_id']  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
