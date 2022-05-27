@@ -84,7 +84,7 @@ for fileListMapping in configFile['file_list_mapping']:
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
         # FOR TEST RUN ONLY + 1 since we start with ZERO
-        TESTING_LIMIT_PER_SHEET = 49
+        TESTING_LIMIT_PER_SHEET = 39
         # set a count for success for each sheet
         successCount = 0
 
@@ -164,10 +164,12 @@ for fileListMapping in configFile['file_list_mapping']:
                 if cfDropdownList['field']['found_in_header']:
                     cFieldDDIndex = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
                 else:
-                    print("[ROW #"+ str(row) + "]: It seems like the " + str(cFieldDD['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cFieldDD['cf_id'] + " as EMPTY."))
                     logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cFieldDD['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cFieldDD['cf_id'] + " as EMPTY. \n"))
-                # push
-                cFieldDDPayload.append({"id": str(cFieldDD['cf_id']), "value":  cFieldDDIndex})
+
+                # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push the payload
+                if cFieldDDIndex:
+                     # push
+                    cFieldDDPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDIndex})
             
 
             # format custom field!!!
@@ -177,7 +179,6 @@ for fileListMapping in configFile['file_list_mapping']:
                         cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
                     except:
                         #if we seems not to found it on the column just set the value to empty
-                        print("[ROW #"+ str(row) + "]: It seems like the " + str(cField['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cField['cf_id'] + " as EMPTY."))
                         logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cField['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cField['cf_id'] + " as EMPTY. \n"))
                         cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  ""})
                         pass
@@ -196,7 +197,6 @@ for fileListMapping in configFile['file_list_mapping']:
                         descriptionGroup += str("**" + fieldContent.replace("_", " ").title()) + ":** " 
                         descriptionGroup += "N/A \n\n" if pd.isna(importFile[fieldContent][row]) else str(importFile[fieldContent][row]).strip() + "\n\n"
                     except:
-                        print("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION.")
                         logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
                         pass
                     
@@ -205,23 +205,24 @@ for fileListMapping in configFile['file_list_mapping']:
                     # push the data
                     description += descriptionGroup
                 else:
-                    print("[ROW #"+ str(row) + "]: It seems like the " + str(fieldCol['title']) + " Section for description data all empty. Ignoring from adding it on the DESCRIPTION.")
                     logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldCol['title']) + " Section for description data all empty. Ignoring from adding it on the DESCRIPTION. \n")
 
             # format task name!!!
             taskName = "#" + str(importFile["Job #"][row]) + " - " + str(importFile["Job Name"][row])
 
+            # due date !!!
+            dueDate = 0 if pd.isna(importFile["Due Date"][row]) else int(importFile["Due Date"][row].timestamp() * 1000)
+
             # set the payload
             taskCreatePayload = {
                 "name": str(taskName),
                 "markdown_description": str(description),
-                "due_date": "" if pd.isna(importFile["Due Date"][row]) else int(importFile["Due Date"][row].timestamp() * 1000),
+                "due_date": dueDate,
                 "custom_fields": cFieldDDPayload,
                 "tags": ["migration-test-data"],
                 "status":"CLOSED"
             }
 
-            
 
             # post request
             taskPostResponse = requests.post(url + "list/" + fileListMapping['list_id']  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
@@ -233,9 +234,11 @@ for fileListMapping in configFile['file_list_mapping']:
                 logFile.write("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']) + "\n\n")
             else:
                 print("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ".")
-                logFile.write("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ". \n\n")
+                print(taskCreatePayload)
+                logFile.write("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ".\n")
+                logFile.write(str(taskPostResponse.json()) + "\n\n")
                 # additional log for investigation
-                print(taskPostResponse)
+                print(taskPostResponse.json())
 
             # FOR TEST RUN ONLY
             if row >= TESTING_LIMIT_PER_SHEET : break
