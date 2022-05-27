@@ -1,4 +1,8 @@
 The following paths are ignored by one of your .gitignore files:
+.DS_Store
 configuration.json
+list-excel/
+sample-excel/
+import-logs/
 Use -f if you really want to add them.
 fatal: no files added
