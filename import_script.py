@@ -65,7 +65,7 @@ apiKey = configFile["api_key"]
 for fileListMapping in configFile['file_list_mapping']:
 
     # read the excel and skip the 1st header
-    importFile = pd.read_excel(fileListMapping['file_name'])
+    importFile = pd.read_excel(fileListMapping['file_path'])
 
     # get the existing field specifically on the list
     existingFieldForTheList = requests.get(url + "list/" + fileListMapping['list_id']  + "/field",headers={'content-type' : 'application/json', "authorization" : apiKey})
@@ -84,17 +84,17 @@ for fileListMapping in configFile['file_list_mapping']:
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
         # FOR TEST RUN ONLY + 1 since we start with ZERO
-        TESTING_LIMIT_PER_SHEET = 1
+        TESTING_LIMIT_PER_SHEET = 49
         # set a count for success for each sheet
         successCount = 0
 
         ## set a log file
-        logFile = open ("import-logs/" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower().replace("xls","txt")), "w")
+        logFile = open ("import-logs/" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + ".txt", "w")
 
         print("### VALIDATION COMPLETE!!")
         print("### MIGRATION STARTS HERE")
         print("### FILE NAME:" + fileListMapping['file_name'])
-        print("### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()))
+        print("### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower() + ".txt"))
         logFile.write("### VALIDATION COMPLETE!!\n### MIGRATION STARTS HERE\n### FILE NAME:" + str(fileListMapping['file_name']) + "\n### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + "\n\n")
         # arrange array here based on the arrangement on the sample task #2r0unr9 !!!
         descriptionArrangement = [
@@ -185,16 +185,16 @@ for fileListMapping in configFile['file_list_mapping']:
             # format description!!!
             description = ""
             for fieldCol in descriptionArrangement:
-                # this flag make sure in each sub we have content if it changes to True it means we have else it will just stay false
                 checkSubListDescription = False
                 descriptionGroup = ""
                 descriptionGroup += "" if fieldCol['title'] == "Summary" else str("---\n") 
                 descriptionGroup += "" if fieldCol['title'] == "Summary" else str("# " + fieldCol['title']) + "\n\n"
                 for fieldContent in fieldCol['list']:
                     try:
-                        if not pd.isna(importFile[fieldContent][row]):
-                            checkSubListDescription = True
-                            descriptionGroup += str("**" + fieldContent.replace("_", " ").replace("."," ").title()) + ":** " + str(importFile[fieldContent][row]).strip() + "\n\n"
+                        # this flag make sure in each sub we have content if it changes to True it means we have else it will just stay false
+                        if not pd.isna(importFile[fieldContent][row]): checkSubListDescription = True
+                        descriptionGroup += str("**" + fieldContent.replace("_", " ").title()) + ":** " 
+                        descriptionGroup += "N/A \n\n" if pd.isna(importFile[fieldContent][row]) else str(importFile[fieldContent][row]).strip() + "\n\n"
                     except:
                         print("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION.")
                         logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
@@ -215,11 +215,13 @@ for fileListMapping in configFile['file_list_mapping']:
             taskCreatePayload = {
                 "name": str(taskName),
                 "markdown_description": str(description),
-                "due_date": int(importFile["Due Date"][row].timestamp() * 1000),
+                "due_date": "" if pd.isna(importFile["Due Date"][row]) else int(importFile["Due Date"][row].timestamp() * 1000),
                 "custom_fields": cFieldDDPayload,
-                "tags": ["script-testing-2"],
+                "tags": ["migration-test-data"],
                 "status":"CLOSED"
             }
+
+            
 
             # post request
             taskPostResponse = requests.post(url + "list/" + fileListMapping['list_id']  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
@@ -228,10 +230,10 @@ for fileListMapping in configFile['file_list_mapping']:
                 successCount += 1
                 jsonResponse = taskPostResponse.json()
                 print("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']))
-                logFile.write("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']) + "\n")
+                logFile.write("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']) + "\n\n")
             else:
                 print("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ".")
-                logFile.write("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ". \n")
+                logFile.write("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ". \n\n")
                 # additional log for investigation
                 print(taskPostResponse)
 
