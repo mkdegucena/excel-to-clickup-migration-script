@@ -1,20 +1,14 @@
+from colorama import Fore, Style
 import requests
 import json
 import pandas as pd
 
-configFileName = "test_configuration.json"
 
-# TEST OR LIVE
-importType = "TEST"
-# FOR TEST RUN ONLY + 1 since we start with ZERO will IGNORE IF TYPE == LIVE
-testLimit = 4
-# TAGS
-listOfTags = ["TEST-BEFORE-LIVE"]
-# STATUS
-taskStatus = "CLOSED"
+configFileName = "configuration.json"
+
 
 # make a format for the list of dropdown to validate, field_id, options_from_excel, options_from_existing
-def customFieldDropdownFormat(customFieldDropdown):
+def customFieldDropdownFormat(importFile,existingFieldForTheList,customFieldDropdown):
 
     dropDownToValidate = {}
     # make sure that this is existing on the header
@@ -42,7 +36,7 @@ def customFieldDropdownFormat(customFieldDropdown):
             }
         }
         # set a log
-        print("It seems like the " + str(customFieldDropdown['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(customFieldDropdown['cf_id'] + " as EMPTY."))
+        print(f"{Fore.LIGHTYELLOW_EX}It seems like the {str(customFieldDropdown['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID: {str(customFieldDropdown['cf_id'])} as EMPTY.{Style.RESET_ALL}")
         pass
 
     return dropDownToValidate
@@ -60,22 +54,14 @@ def validateCustomFieldsDropDownfromExcelColumn(cfFieldDropown):
             for existingOption in existingOptionsonExcel:
                 validateExistingOption = [item for item in availableOptions if item['name'] == str(existingOption)]
                 if not validateExistingOption:
-                    print("[" + str(existingOption) + "] is not existing on the menu option for custom field id " + str(cfField['field']['existing_from_cf']['id']) + " - " + str(cfField['field']['existing_from_cf']['name']))
+                    print(f"{Fore.LIGHTYELLOW_EX}[{str(existingOption)}] is not existing on the menu option for custom field id {str(cfField['field']['existing_from_cf']['id'])} - {str(cfField['field']['existing_from_cf']['name'])}.{Style.RESET_ALL}")
                     isValid = False
 
     return isValid
 
-# get configuration
-with open(configFileName) as f:
-    configFile = json.load(f)
-
-# configuration
-url = configFile["base_url"]
-apiKey = configFile["api_key"]
-
-for fileListMapping in configFile['file_list_mapping']:
-
-    # read the excel and skip the 1st header
+# start importing here per LIST
+def startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus):
+     # read the excel and skip the 1st header
     importFile = pd.read_excel(fileListMapping['file_path'])
 
     # get the existing field specifically on the list
@@ -87,7 +73,7 @@ for fileListMapping in configFile['file_list_mapping']:
     # custom field drop down from configuration
     for customFieldDropDown in configFile['custom_field_dropdown']:
         # this is where we pull out all the existing custom field value and compare on the column that we have
-        listofCustomFieldDropdowntoValidate.append(customFieldDropdownFormat(customFieldDropDown))
+        listofCustomFieldDropdowntoValidate.append(customFieldDropdownFormat(importFile,existingFieldForTheList,customFieldDropDown))
 
     ######## IMPORTING START HERE #########
 
@@ -99,16 +85,14 @@ for fileListMapping in configFile['file_list_mapping']:
 
         # set a count for success for each sheet
         successCount = 0
-
+        # set a file name
+        fileLogName = str(importType + "_log_" + fileListMapping['file_name'].replace(" ", "_").lower() + ("" if fileListMapping['continue'] is not True else "_continue") + ".txt")
         ## set a log file
-        logFile = open ("import-logs/" + str(importType + "_log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + ".txt", "w")
+        logFile = open ("import-logs/" + fileLogName, "w")
 
-        print("### VALIDATION COMPLETE!!")
-        print("### MIGRATION STARTS HERE")
-        print("### MIGRATION  TYPE:" + str(importType))
-        print("### FILE NAME:" + str(fileListMapping['file_name']))
-        print("### FILE LOG NAME:" + str(importType + "_log_" + fileListMapping['file_name'].replace(" ", "_").lower() + ".txt"))
-        logFile.write("### VALIDATION COMPLETE!!\n### MIGRATION STARTS HERE\n### FILE NAME:" + str(fileListMapping['file_name']) + "\n### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + "\n\n")
+        print(f"{Fore.BLUE}### VALIDATION COMPLETE!!\n### MIGRATION STARTS HERE\n### MIGRATION TYPE: {Style.RESET_ALL}{str(importType)}\n{Fore.BLUE}### FILE NAME: {Style.RESET_ALL}{str(fileListMapping['file_name'])}\n{Fore.BLUE}### FILE LOG NAME: {Style.RESET_ALL}{fileLogName}")
+        logFile.write(f"### VALIDATION COMPLETE!!\n### MIGRATION STARTS HERE\n### MIGRATION TYPE: {str(importType)}\n### FILE NAME: {str(fileListMapping['file_name'])}\n### FILE LOG NAME: {fileLogName}\n\n")
+
         # arrange array here based on the arrangement on the sample task #2r0unr9 !!!
         descriptionArrangement = [
                                     {
@@ -163,7 +147,7 @@ for fileListMapping in configFile['file_list_mapping']:
                                 ]
 
         # now loop
-        for row in range(0,len(importFile)):
+        for row in range(fileListMapping['range_start'],len(importFile)):
 
             # THIS IS WHERE WE START TO MODIFY THE PAYLOAD!
 
@@ -178,7 +162,7 @@ for fileListMapping in configFile['file_list_mapping']:
                 if cfDropdownList['field']['found_in_header']:
                     cFieldDDIndex = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
                 else:
-                    logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cFieldDD['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cFieldDD['cf_id'] + " as EMPTY. \n"))
+                    logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cFieldDD['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cFieldDD['cf_id'])} as EMPTY.\n")
 
                 # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
                 if cFieldDDIndex:
@@ -195,7 +179,7 @@ for fileListMapping in configFile['file_list_mapping']:
                             cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
                     except:
                         #if we seems not to found it on the column just set the value to empty
-                        logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(cField['header_name_on_excel']) + " is not existing on the excel as a header. We're gonna CFID:" + str(cField['cf_id'] + " as EMPTY. \n"))
+                        logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cField['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cField['cf_id'])} as EMPTY.\n")
                         pass
 
             # format description!!!
@@ -212,7 +196,7 @@ for fileListMapping in configFile['file_list_mapping']:
                         descriptionGroup += str("**" + fieldContent.replace("_", " ").title()) + ":** " 
                         descriptionGroup += "N/A \n\n" if pd.isna(importFile[fieldContent][row]) else str(importFile[fieldContent][row]).strip() + "\n\n"
                     except:
-                        logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldContent) + " is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
+                        logFile.write(f"[ROW #{str(row)}]: It seems like the {str(fieldContent)} is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
                         pass
                     
                 # do we have any atleast one value?
@@ -220,7 +204,7 @@ for fileListMapping in configFile['file_list_mapping']:
                     # push the data
                     description += descriptionGroup
                 else:
-                    logFile.write("[ROW #"+ str(row) + "]: It seems like the " + str(fieldCol['title']) + " Section for description data all empty. Ignoring from adding it on the DESCRIPTION. \n")
+                    logFile.write(f"[ROW #{str(row)}]: It seems like the {str(fieldCol['title'])} Section for description data all empty. Ignoring from adding it on the DESCRIPTION. \n")
 
             # format task name!!!
             taskName = "#" + str(importFile["Job #"][row]) + " - " + str(importFile["Job Name"][row])
@@ -238,27 +222,50 @@ for fileListMapping in configFile['file_list_mapping']:
                 "status":taskStatus
             }
 
+            # print(f"ROW #{str(row)} -> TASK NAME: {taskName}")
+
             # post request
             taskPostResponse = requests.post(url + "list/" + fileListMapping['list_id']  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
             # confirm
             if taskPostResponse.status_code == 200:
                 successCount += 1
                 jsonResponse = taskPostResponse.json()
-                print("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']))
-                logFile.write("[ROW #"+ str(row) + "][IMPORT SUCCESS]: " + str(taskName) + ". [TASK ID]: " + str(jsonResponse['id']) + "\n\n")
+                print(f"{Fore.GREEN}[ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
+                logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
             else:
-                print("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ".")
-                print(taskCreatePayload)
-                logFile.write("[ROW #"+ str(row) + "][IMPORT FAILED]: " + str(taskName) + ".\n")
-                logFile.write(str(taskPostResponse.json()) + "\n\n")
+                print(f"{Fore.RED}[ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
+                logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(taskPostResponse.json())}\n\n")
                 # additional log for investigation
+                print(taskCreatePayload)
                 print(taskPostResponse.json())
+
 
             # FOR TEST RUN ONLY
             if row >= TESTING_LIMIT_PER_SHEET and importType == "TEST" : break
 
 
-        print("### IMPORT COMPLETE!! TOTAL OF " + str(successCount) + " out of " + str(len(importFile)))
-        logFile.write("\n### IMPORT COMPLETE!! TOTAL OF " + str(successCount) + " out of " + str(len(importFile)))
-        ## close the file
+        print(f"{Fore.GREEN}### IMPORT COMPLETE!! TOTAL OF {str(successCount)} out of {str(len(importFile))}{Style.RESET_ALL}")
+        logFile.write(f"\n### IMPORT COMPLETE!! TOTAL OF {str(successCount)} out of {str(len(importFile))}")
+        ## close the file for this log list
         logFile.close()
+
+
+## SCRIPT START HERE
+
+# get configuration
+with open(configFileName) as f:
+    configFile = json.load(f)
+
+# configuration PS: range_start should be + 2 + header and start with 0
+url = configFile["base_url"]
+apiKey = configFile["api_key"]
+importType = configFile["import_type"] # TEST OR LIVE
+testLimit = configFile["test_limit"] # FOR TEST RUN ONLY + 1 since we start with ZERO will IGNORE IF TYPE == LIVE
+listOfTags = configFile["list_of_tags"] # TAGS
+taskStatus = configFile["task_status"] # STATUS
+
+for fileListMapping in configFile['file_list_mapping']:
+
+    if fileListMapping['status'] == "for_import":
+        # start importing!
+        startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus)
