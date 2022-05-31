@@ -109,6 +109,7 @@ for fileListMapping in configFile['file_list_mapping']:
                                         "list":[
                                                     'Job_Type',
                                                     'Quantity',
+                                                    'Delivery_Info'
                                                     'Production_Specs',
                                                     'Budget_Notes',
                                                     'Reference_Job',
