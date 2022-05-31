@@ -2,6 +2,17 @@ import requests
 import json
 import pandas as pd
 
+configFileName = "test_configuration.json"
+
+# TEST OR LIVE
+importType = "TEST"
+# FOR TEST RUN ONLY + 1 since we start with ZERO will IGNORE IF TYPE == LIVE
+testLimit = 4
+# TAGS
+listOfTags = ["TEST-BEFORE-LIVE"]
+# STATUS
+taskStatus = "CLOSED"
+
 # make a format for the list of dropdown to validate, field_id, options_from_excel, options_from_existing
 def customFieldDropdownFormat(customFieldDropdown):
 
@@ -55,7 +66,7 @@ def validateCustomFieldsDropDownfromExcelColumn(cfFieldDropown):
     return isValid
 
 # get configuration
-with open("configuration.json") as f:
+with open(configFileName) as f:
     configFile = json.load(f)
 
 # configuration
@@ -84,17 +95,19 @@ for fileListMapping in configFile['file_list_mapping']:
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
         # FOR TEST RUN ONLY + 1 since we start with ZERO
-        TESTING_LIMIT_PER_SHEET = 49
+        TESTING_LIMIT_PER_SHEET = testLimit
+
         # set a count for success for each sheet
         successCount = 0
 
         ## set a log file
-        logFile = open ("import-logs/" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + ".txt", "w")
+        logFile = open ("import-logs/" + str(importType + "_log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + ".txt", "w")
 
         print("### VALIDATION COMPLETE!!")
         print("### MIGRATION STARTS HERE")
-        print("### FILE NAME:" + fileListMapping['file_name'])
-        print("### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower() + ".txt"))
+        print("### MIGRATION  TYPE:" + str(importType))
+        print("### FILE NAME:" + str(fileListMapping['file_name']))
+        print("### FILE LOG NAME:" + str(importType + "_log_" + fileListMapping['file_name'].replace(" ", "_").lower() + ".txt"))
         logFile.write("### VALIDATION COMPLETE!!\n### MIGRATION STARTS HERE\n### FILE NAME:" + str(fileListMapping['file_name']) + "\n### FILE LOG NAME:" + str("log_" + fileListMapping['file_name'].replace(" ", "_").lower()) + "\n\n")
         # arrange array here based on the arrangement on the sample task #2r0unr9 !!!
         descriptionArrangement = [
@@ -109,7 +122,7 @@ for fileListMapping in configFile['file_list_mapping']:
                                         "list":[
                                                     'Job_Type',
                                                     'Quantity',
-                                                    'Delivery_Info'
+                                                    'Delivery_Info',
                                                     'Production_Specs',
                                                     'Budget_Notes',
                                                     'Reference_Job',
@@ -221,8 +234,8 @@ for fileListMapping in configFile['file_list_mapping']:
                 "markdown_description": str(description),
                 "due_date": dueDate,
                 "custom_fields": cFieldDDPayload,
-                "tags": ["migration-test-data"],
-                "status":"CLOSED"
+                "tags": listOfTags,
+                "status":taskStatus
             }
 
             # post request
@@ -242,7 +255,7 @@ for fileListMapping in configFile['file_list_mapping']:
                 print(taskPostResponse.json())
 
             # FOR TEST RUN ONLY
-            if row >= TESTING_LIMIT_PER_SHEET : break
+            if row >= TESTING_LIMIT_PER_SHEET and importType == "TEST" : break
 
 
         print("### IMPORT COMPLETE!! TOTAL OF " + str(successCount) + " out of " + str(len(importFile)))
