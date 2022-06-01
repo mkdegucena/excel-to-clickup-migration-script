@@ -2,6 +2,8 @@ from colorama import Fore, Style
 import requests
 import json
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+import time
 
 
 configFileName = "configuration.json"
@@ -59,8 +61,17 @@ def validateCustomFieldsDropDownfromExcelColumn(cfFieldDropown):
 
     return isValid
 
+def createTask(url,taskCreatePayload,listID,apiKey): 
+    try:
+        # post request
+        taskPostResponse = requests.post(url + "list/" + listID  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
+        # response
+        return taskPostResponse
+    except requests.exceptions.RequestException as e:
+        return e
+
 # start importing here per LIST
-def startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus):
+def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus,url,apiKey,configFile):
      # read the excel and skip the 1st header
     importFile = pd.read_excel(fileListMapping['file_path'])
 
@@ -83,6 +94,8 @@ def startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus):
         # FOR TEST RUN ONLY + 1 since we start with ZERO
         TESTING_LIMIT_PER_SHEET = testLimit
 
+        # start time per list
+        startTime = time.time()
         # set a count for success for each sheet
         successCount = 0
         # set a file name
@@ -221,51 +234,51 @@ def startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus):
                 "tags": listOfTags,
                 "status":taskStatus
             }
-
-            # print(f"ROW #{str(row)} -> TASK NAME: {taskName}")
-
+            
             # post request
-            taskPostResponse = requests.post(url + "list/" + fileListMapping['list_id']  + "/task", data=json.dumps(taskCreatePayload),headers={'content-type' : 'application/json', "authorization" : apiKey})
+            taskPostResponse = createTask(url,taskCreatePayload,fileListMapping['list_id'],apiKey)
+            
             # confirm
+            jsonResponse = taskPostResponse.json()
             if taskPostResponse.status_code == 200:
                 successCount += 1
-                jsonResponse = taskPostResponse.json()
-                print(f"{Fore.GREEN}[ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
+                print(f"{Fore.GREEN}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
                 logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
             else:
-                print(f"{Fore.RED}[ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
-                logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(taskPostResponse.json())}\n\n")
-                # additional log for investigation
+                print(f"{Fore.RED}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
                 print(taskCreatePayload)
                 print(taskPostResponse.json())
-
+                logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(jsonResponse)}\n[PAYLOAD]: {str(taskCreatePayload)}\n[RESPONSE]: {str(taskPostResponse.json())}\n\n")
 
             # FOR TEST RUN ONLY
             if row >= TESTING_LIMIT_PER_SHEET and importType == "TEST" : break
 
-
         print(f"{Fore.GREEN}### IMPORT COMPLETE!! TOTAL OF {str(successCount)} out of {str(len(importFile))}{Style.RESET_ALL}")
-        logFile.write(f"\n### IMPORT COMPLETE!! TOTAL OF {str(successCount)} out of {str(len(importFile))}")
-        ## close the file for this log list
+        print("--- %s seconds ---" % (time.time() - startTime))
+        logFile.write(f"\n### IMPORT COMPLETE!! TOTAL OF {str(successCount)} out of {str(len(importFile))}\n")
+        logFile.write("--- %s seconds ---" % (time.time() - startTime))
+        # close log file for LIST
         logFile.close()
 
 
 ## SCRIPT START HERE
+def batchImport():
+    # get configuration
+    with open(configFileName) as f:
+        configFile = json.load(f)
 
-# get configuration
-with open(configFileName) as f:
-    configFile = json.load(f)
+    # configuration PS: range_start should be + 2 + header and start with 0
+    url = configFile["base_url"]
+    apiKey = configFile["api_key"]
+    importType = configFile["import_type"] # TEST OR LIVE
+    testLimit = configFile["test_limit"] # FOR TEST RUN ONLY + 1 since we start with ZERO will IGNORE IF TYPE == LIVE
+    listOfTags = configFile["list_of_tags"] # TAGS
+    taskStatus = configFile["task_status"] # STATUS
 
-# configuration PS: range_start should be + 2 + header and start with 0
-url = configFile["base_url"]
-apiKey = configFile["api_key"]
-importType = configFile["import_type"] # TEST OR LIVE
-testLimit = configFile["test_limit"] # FOR TEST RUN ONLY + 1 since we start with ZERO will IGNORE IF TYPE == LIVE
-listOfTags = configFile["list_of_tags"] # TAGS
-taskStatus = configFile["task_status"] # STATUS
-
-for fileListMapping in configFile['file_list_mapping']:
-
-    if fileListMapping['status'] == "for_import":
-        # start importing!
-        startImporting(fileListMapping,importType,testLimit,listOfTags,taskStatus)
+    #start threading
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        for fileListMapping in configFile['file_list_mapping']:
+            if fileListMapping['status'] == "for_import":
+                executor.submit(importExceltoList, fileListMapping, importType, testLimit, listOfTags, taskStatus, url, apiKey, configFile)
+# init           
+batchImport()
