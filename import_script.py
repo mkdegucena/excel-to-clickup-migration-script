@@ -5,9 +5,8 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-
+# config file
 configFileName = "configuration.json"
-
 
 # make a format for the list of dropdown to validate, field_id, options_from_excel, options_from_existing
 def customFieldDropdownFormat(importFile,existingFieldForTheList,customFieldDropdown):
@@ -86,8 +85,6 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
         # this is where we pull out all the existing custom field value and compare on the column that we have
         listofCustomFieldDropdowntoValidate.append(customFieldDropdownFormat(importFile,existingFieldForTheList,customFieldDropDown))
 
-    ######## IMPORTING START HERE #########
-
     # validate first before move to importing, this goes only one time so you can clear this out probably to reduce the process (but not a big deal)
     if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
         
@@ -130,7 +127,19 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
                                                     'Legacy_Campus',
                                                     'Legacy_Id',
                                                     'Legacy_Job_Number',
-                                                    'Legacy_Org_Code'
+                                                    'Legacy_Org_Code',
+                                                    'Communications_Manager',
+                                                    'Copy_Editor',
+                                                    'Designer',
+                                                    'Production_Lead',
+                                                    'Writer_Editor',
+                                                    'Location',
+                                                    'Partner',
+                                                    'Partner_Contact_Info',
+                                                    'Partner_Department',
+                                                    'jobCategory.Name',
+                                                    'jobGroup.Name',
+                                                    'jobLevel.Name'
                                                 ]
                                     },
                                     {
@@ -206,7 +215,7 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
                     try:
                         # this flag make sure in each sub we have content if it changes to True it means we have else it will just stay false
                         if not pd.isna(importFile[fieldContent][row]): checkSubListDescription = True
-                        descriptionGroup += str("**" + fieldContent.replace("_", " ").title()) + ":** " 
+                        descriptionGroup += str("**" + fieldContent.replace("_", " ").replace(".", " ").title()) + ":** " 
                         descriptionGroup += "N/A \n\n" if pd.isna(importFile[fieldContent][row]) else str(importFile[fieldContent][row]).strip() + "\n\n"
                     except:
                         logFile.write(f"[ROW #{str(row)}]: It seems like the {str(fieldContent)} is not existing on the excel as a header. Ignoring from adding it on the DESCRIPTION. \n")
@@ -260,8 +269,6 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
         # close log file for LIST
         logFile.close()
 
-
-## SCRIPT START HERE
 def batchImport():
     # get configuration
     with open(configFileName) as f:
