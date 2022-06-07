@@ -4,6 +4,8 @@ import json
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
+from urllib.parse import urlparse
+
 
 # config file
 configFileName = "configuration.json"
@@ -59,6 +61,14 @@ def validateCustomFieldsDropDownfromExcelColumn(cfFieldDropown):
                     isValid = False
 
     return isValid
+
+def validateURL(url):
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
+
 
 def createTask(url,taskCreatePayload,listID,apiKey): 
     try:
@@ -192,10 +202,10 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
                     cFieldDDPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDIndex})
             
 
-            # format custom field!!!
-            for cField in configFile['custom_field']:
+            # format custom field link!!!
+            for cField in configFile['custom_field_link']:
                     try:
-                        cfValue =  "" if pd.isna(importFile[cField['header_name_on_excel']][row]) else str(importFile[cField['header_name_on_excel']][row])
+                        cfValue =  "" if pd.isna(importFile[cField['header_name_on_excel']][row]) or not validateURL(importFile[cField['header_name_on_excel']][row]) else str(importFile[cField['header_name_on_excel']][row])
                         # getting error {'err': 'Value is not a valid URL', 'ECODE': 'FIELD_010'} to prevent just don't push as part of the payload
                         if cfValue:
                             cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
@@ -243,21 +253,23 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
                 "tags": listOfTags,
                 "status":taskStatus
             }
+
+            # print(taskCreatePayload)
             
-            # post request
-            taskPostResponse = createTask(url,taskCreatePayload,fileListMapping['list_id'],apiKey)
-            
-            # confirm
-            jsonResponse = taskPostResponse.json()
-            if taskPostResponse.status_code == 200:
-                successCount += 1
-                print(f"{Fore.GREEN}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
-                logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
-            else:
-                print(f"{Fore.RED}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
-                print(taskCreatePayload)
-                print(taskPostResponse.json())
-                logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(jsonResponse)}\n[PAYLOAD]: {str(taskCreatePayload)}\n[RESPONSE]: {str(taskPostResponse.json())}\n\n")
+            # # post request
+            # taskPostResponse = createTask(url,taskCreatePayload,fileListMapping['list_id'],apiKey)
+
+            # # confirm
+            # jsonResponse = taskPostResponse.json()
+            # if taskPostResponse.status_code == 200:
+            #     successCount += 1
+            #     print(f"{Fore.GREEN}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
+            #     logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
+            # else:
+            #     print(f"{Fore.RED}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
+            #     print(taskCreatePayload)
+            #     print(taskPostResponse.json())
+            #     logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(jsonResponse)}\n[PAYLOAD]: {str(taskCreatePayload)}\n[RESPONSE]: {str(taskPostResponse.json())}\n\n")
 
             # FOR TEST RUN ONLY
             if row >= TESTING_LIMIT_PER_SHEET and importType == "TEST" : break
