@@ -2,9 +2,9 @@ from colorama import Fore, Style
 import requests
 import json
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 import time
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 
 
 # config file
@@ -25,7 +25,7 @@ def customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFiel
                 uniqueListFromExcelColumn = [item.strip() for item in uniqueListFromExcelColumn]
         # now get the existing custom field and all of it's value
         existingOptionFromCF = [item for item in existingFieldForTheList if item['id'] == customFieldDropdownLabel['cf_id']][0]
-
+        print(f"{Fore.BLUE}###[CUSTOM FIELD DROPDOWN/LABEL FORMAT][FOUND]:{Style.RESET_ALL} We found {customFieldDropdownLabel['header_name_on_excel']} on both excel and your Workspace Custom Fields.")
         # set the data
         dropDownLabelToValidate = {
             'field':{
@@ -41,26 +41,26 @@ def customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFiel
     except:
         # push only the ID
         dropDownLabelToValidate = {
-            'field':{
+        'field':{
                 # custom field ID from configuration
                 'field_id': customFieldDropdownLabel['cf_id'],
                 'found_in_header':False
             }
         }
         # set a log
-        print(f"{Fore.LIGHTYELLOW_EX}It seems like the {str(customFieldDropdownLabel['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID: {str(customFieldDropdownLabel['cf_id'])} as EMPTY.{Style.RESET_ALL}")
+        print(f"{Fore.LIGHTYELLOW_EX}###[CUSTOM FIELD DROPDOWN/LABEL FORMAT][NOT FOUND]:It seems like the {str(customFieldDropdownLabel['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID: {str(customFieldDropdownLabel['cf_id'])} as EMPTY.{Style.RESET_ALL}")
         pass
 
     return dropDownLabelToValidate
 
 # function that validates a custom field menu based on the excel column that it is mapped into; we creating a new list ^ that is unique so we can identify it
-def validateCustomFieldsDropDownLabelfromExcelColumn(cfFieldDropownLabel):
-    
+def validateCustomFieldsDropDownLabelfromExcelColumn(cfFieldDropownLabel):    
     # we only making it true if we are clear on every custom field menu
     isValid = True
     for cfField in cfFieldDropownLabel:
         # this means the cfDropdown is not found in the header we will moved and set it
         if cfField['field']['found_in_header']:
+            
             availableOptions = cfField['field']['existing_from_cf']['type_config']['options']
             existingOptionsonExcel = cfField['field']['options']
             # check the custom field type either we get label or name
@@ -69,8 +69,10 @@ def validateCustomFieldsDropDownLabelfromExcelColumn(cfFieldDropownLabel):
             for existingOption in existingOptionsonExcel:
                 validateExistingOption = [item for item in availableOptions if item[fieldTypeKey] == str(existingOption)]
                 if not validateExistingOption:
-                    print(f"{Fore.LIGHTYELLOW_EX}[{str(existingOption)}] is not existing on the menu option for custom field id {str(cfField['field']['existing_from_cf']['id'])} - {str(cfField['field']['existing_from_cf']['name'])}.{Style.RESET_ALL}")
+                    print(f"{Fore.RED}[{str(existingOption)}][NOT FOUND]:{Style.RESET_ALL} Is not existing on the menu option for custom field id {str(cfField['field']['existing_from_cf']['id'])} - {str(cfField['field']['existing_from_cf']['name'])}.")
                     isValid = False
+                else:
+                    print(f"{Fore.GREEN}[{str(existingOption)}][EXIST]:{Style.RESET_ALL} We found this exist! {str(cfField['field']['existing_from_cf']['id'])} - {str(cfField['field']['existing_from_cf']['name'])}")
 
     return isValid
 
@@ -81,6 +83,13 @@ def validateURL(url):
     except ValueError:
         return False
 
+# check the format here https://www.tutorialspoint.com/python/time_strptime.htm when going to pd it always return this pattern %Y-%m-%d %H:%M:%S
+def validateDate(dateString,pattern = "%Y-%m-%d %H:%M:%S"):
+    try:
+        time.strptime(str(dateString), pattern)
+        return True
+    except:
+        return False
 
 def createTask(url,taskCreatePayload,listID,apiKey): 
     try:
@@ -109,8 +118,6 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
 
     # validate first before move to importing, this goes only one time so you can clear this out probably to reduce the process (but not a big deal)
     if (validateCustomFieldsDropDownLabelfromExcelColumn(listofCustomFieldDropdownLabeltoValidate)):
-        print("LOOKING GOOD!")
-
         # FOR TEST RUN ONLY + 1 since we start with ZERO
         TESTING_LIMIT_PER_SHEET = testLimit
 
@@ -196,32 +203,58 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
 
             # THIS IS WHERE WE START TO MODIFY THE PAYLOAD!
 
-            # set payload for custom field!!!
-            cFieldDDPayload = []
+            # set payload for all  custom field!!!
+            cfPayload = []
 
             # format custom field dropdown!!!
             for cFieldDD in configFile['custom_field_dropdown_label']:
-                cFieldDDIndex = ""
+                cFieldDDValue = ""
+                cFieldLabelValue = []
                 # make sure we found it on header else make it empty, set the matching from config file
                 cfDropdownList = [item for item in listofCustomFieldDropdownLabeltoValidate if str(item['field']['field_id']) == str(cFieldDD['cf_id'])][0]
                 if cfDropdownList['field']['found_in_header']:
-                    cFieldDDIndex = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
+                    # for labels Type
+                    if cfDropdownList['field']['existing_from_cf']['type'] == "labels":
+                        for label in importFile[cFieldDD['header_name_on_excel']][row].split(cFieldDD["splitter"]):
+                            # get the value and push it
+                            cFieldLabelValue.append("" if pd.isna(label.strip()) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['label'] == str(label.strip())][0]['id'])
+                    # for drop_down Type
+                    if cfDropdownList['field']['existing_from_cf']['type'] == "drop_down":
+                        cFieldDDValue = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
                 else:
                     logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cFieldDD['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cFieldDD['cf_id'])} as EMPTY.\n")
+                    pass
 
+                # for drop_down
                 # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
-                if cFieldDDIndex:
+                if cFieldDDValue:
                      # push
-                    cFieldDDPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDIndex})
-            
-
+                    cfPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDValue})
+               
+                # for label
+                if cFieldLabelValue:
+                     # push
+                    cfPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldLabelValue})
+  
             # format custom field link!!!
             for cField in configFile['custom_field_link']:
                     try:
                         cfValue =  "" if pd.isna(importFile[cField['header_name_on_excel']][row]) or not validateURL(importFile[cField['header_name_on_excel']][row]) else str(importFile[cField['header_name_on_excel']][row])
                         # getting error {'err': 'Value is not a valid URL', 'ECODE': 'FIELD_010'} to prevent just don't push as part of the payload
                         if cfValue:
-                            cFieldDDPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
+                            cfPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
+                    except:
+                        #if we seems not to found it on the column just set the value to empty
+                        logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cField['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cField['cf_id'])} as EMPTY.\n")
+                        pass
+
+            # format custom field date!!!
+            for cField in configFile['custom_field_date']:
+                    try:
+                        cfValue =  "" if pd.isna(importFile[cField['header_name_on_excel']][row]) or not validateDate(importFile[cField['header_name_on_excel']][row]) else int(importFile[cField['header_name_on_excel']][row].timestamp() * 1000)
+                        #getting error {'err': 'Value is not a valid date', 'ECODE': 'FIELD_017'} to prevent just don't push as part of the payload
+                        if cfValue:
+                            cfPayload.append({"id": str(cField['cf_id']), "value":  cfValue})
                     except:
                         #if we seems not to found it on the column just set the value to empty
                         logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cField['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cField['cf_id'])} as EMPTY.\n")
@@ -255,34 +288,33 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
             taskName = "#" + str(importFile["Job #"][row]) + " - " + str(importFile["Job Name"][row])
 
             # due date !!!
-            dueDate = 0 if pd.isna(importFile["Due Date"][row]) else int(importFile["Due Date"][row].timestamp() * 1000)
+            dueDate = 0 if pd.isna(importFile["Due Date"][row]) or not validateDate(importFile["Due Date"][row]) else int(importFile["Due Date"][row].timestamp() * 1000)
 
             # set the payload
             taskCreatePayload = {
                 "name": str(taskName),
                 "markdown_description": str(description),
                 "due_date": dueDate,
-                "custom_fields": cFieldDDPayload,
+                "custom_fields": cfPayload,
                 "tags": listOfTags,
                 "status":taskStatus
             }
 
-            # print(taskCreatePayload)
-            
-            # # post request
-            # taskPostResponse = createTask(url,taskCreatePayload,fileListMapping['list_id'],apiKey)
+            # post request
+            taskPostResponse = createTask(url,taskCreatePayload,fileListMapping['list_id'],apiKey)
 
-            # # confirm
-            # jsonResponse = taskPostResponse.json()
-            # if taskPostResponse.status_code == 200:
-            #     successCount += 1
-            #     print(f"{Fore.GREEN}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
-            #     logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
-            # else:
-            #     print(f"{Fore.RED}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
-            #     print(taskCreatePayload)
-            #     print(taskPostResponse.json())
-            #     logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(jsonResponse)}\n[PAYLOAD]: {str(taskCreatePayload)}\n[RESPONSE]: {str(taskPostResponse.json())}\n\n")
+            # confirm
+            jsonResponse = taskPostResponse.json()
+
+            if taskPostResponse.status_code == 200:
+                successCount += 1
+                print(f"{Fore.GREEN}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT SUCCESS]:{Style.RESET_ALL} {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}")
+                logFile.write(f"[ROW #{str(row)}][IMPORT SUCCESS]: {str(taskName)}. [TASK ID]: {str(jsonResponse['id'])}\n\n")
+            else:
+                print(f"{Fore.RED}[LIST ID {fileListMapping['list_id']}][ROW #{str(row)}][IMPORT FAILED]:{Style.RESET_ALL} {str(taskName)}.")
+                print(taskCreatePayload)
+                print(taskPostResponse.json())
+                logFile.write(f"[ROW #{str(row)}][IMPORT FAILED]: {str(taskName)}.\n{str(jsonResponse)}\n[PAYLOAD]: {str(taskCreatePayload)}\n[RESPONSE]: {str(taskPostResponse.json())}\n\n")
 
             # FOR TEST RUN ONLY
             if row >= TESTING_LIMIT_PER_SHEET and importType == "TEST" : break
