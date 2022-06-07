@@ -19,10 +19,13 @@ def customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFiel
         uniqueListFromExcelColumn = []
         for headerNameData in importFile[customFieldDropdownLabel['header_name_on_excel']].tolist():
             if str(headerNameData) != "nan":
+                # separate by splitter
                 uniqueListFromExcelColumn.extend(headerNameData.split(customFieldDropdownLabel["splitter"]))
-
+                # strip the white spaces causes by splitter
+                uniqueListFromExcelColumn = [item.strip() for item in uniqueListFromExcelColumn]
         # now get the existing custom field and all of it's value
         existingOptionFromCF = [item for item in existingFieldForTheList if item['id'] == customFieldDropdownLabel['cf_id']][0]
+
         # set the data
         dropDownLabelToValidate = {
             'field':{
@@ -51,17 +54,20 @@ def customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFiel
     return dropDownLabelToValidate
 
 # function that validates a custom field menu based on the excel column that it is mapped into; we creating a new list ^ that is unique so we can identify it
-def validateCustomFieldsDropDownfromExcelColumn(cfFieldDropown):
-
+def validateCustomFieldsDropDownLabelfromExcelColumn(cfFieldDropownLabel):
+    
     # we only making it true if we are clear on every custom field menu
     isValid = True
-    for cfField in cfFieldDropown:
+    for cfField in cfFieldDropownLabel:
         # this means the cfDropdown is not found in the header we will moved and set it
         if cfField['field']['found_in_header']:
             availableOptions = cfField['field']['existing_from_cf']['type_config']['options']
             existingOptionsonExcel = cfField['field']['options']
+            # check the custom field type either we get label or name
+            fieldTypeKey = "label" if cfField['field']['existing_from_cf']['type'] == "labels" else "name"
+            # find and match
             for existingOption in existingOptionsonExcel:
-                validateExistingOption = [item for item in availableOptions if item['name'] == str(existingOption)]
+                validateExistingOption = [item for item in availableOptions if item[fieldTypeKey] == str(existingOption)]
                 if not validateExistingOption:
                     print(f"{Fore.LIGHTYELLOW_EX}[{str(existingOption)}] is not existing on the menu option for custom field id {str(cfField['field']['existing_from_cf']['id'])} - {str(cfField['field']['existing_from_cf']['name'])}.{Style.RESET_ALL}")
                     isValid = False
@@ -95,15 +101,16 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
     existingFieldForTheList = existingFieldForTheList.json()['fields']
 
     # set the dropdown for validate
-    listofCustomFieldDropdowntoValidate = []
+    listofCustomFieldDropdownLabeltoValidate = []
     # custom field drop down from configuration
-    for customFieldDropDown in configFile['custom_field_dropdown_label']:
+    for customFieldDropDownLabel in configFile['custom_field_dropdown_label']:
         # this is where we pull out all the existing custom field value and compare on the column that we have
-        listofCustomFieldDropdowntoValidate.append(customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFieldDropDown))
+        listofCustomFieldDropdownLabeltoValidate.append(customFieldDropdownLabelFormat(importFile,existingFieldForTheList,customFieldDropDownLabel))
 
     # validate first before move to importing, this goes only one time so you can clear this out probably to reduce the process (but not a big deal)
-    if (validateCustomFieldsDropDownfromExcelColumn(listofCustomFieldDropdowntoValidate)):
-        
+    if (validateCustomFieldsDropDownLabelfromExcelColumn(listofCustomFieldDropdownLabeltoValidate)):
+        print("LOOKING GOOD!")
+
         # FOR TEST RUN ONLY + 1 since we start with ZERO
         TESTING_LIMIT_PER_SHEET = testLimit
 
@@ -196,7 +203,7 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
             for cFieldDD in configFile['custom_field_dropdown_label']:
                 cFieldDDIndex = ""
                 # make sure we found it on header else make it empty, set the matching from config file
-                cfDropdownList = [item for item in listofCustomFieldDropdowntoValidate if str(item['field']['field_id']) == str(cFieldDD['cf_id'])][0]
+                cfDropdownList = [item for item in listofCustomFieldDropdownLabeltoValidate if str(item['field']['field_id']) == str(cFieldDD['cf_id'])][0]
                 if cfDropdownList['field']['found_in_header']:
                     cFieldDDIndex = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
                 else:
