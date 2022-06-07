@@ -200,7 +200,6 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
 
         # now loop
         for row in range(fileListMapping['range_start'],len(importFile)):
-
             # THIS IS WHERE WE START TO MODIFY THE PAYLOAD!
 
             # set payload for all  custom field!!!
@@ -210,32 +209,32 @@ def importExceltoList(fileListMapping,importType,testLimit,listOfTags,taskStatus
             for cFieldDD in configFile['custom_field_dropdown_label']:
                 cFieldDDValue = ""
                 cFieldLabelValue = []
-                # make sure we found it on header else make it empty, set the matching from config file
+                # # make sure we found it on header else make it empty, set the matching from config file
                 cfDropdownList = [item for item in listofCustomFieldDropdownLabeltoValidate if str(item['field']['field_id']) == str(cFieldDD['cf_id'])][0]
                 if cfDropdownList['field']['found_in_header']:
                     # for labels Type
-                    if cfDropdownList['field']['existing_from_cf']['type'] == "labels":
+                    if cfDropdownList['field']['existing_from_cf']['type'] == "labels" and not pd.isna(importFile[cFieldDD['header_name_on_excel']][row]):
                         for label in importFile[cFieldDD['header_name_on_excel']][row].split(cFieldDD["splitter"]):
                             # get the value and push it
-                            cFieldLabelValue.append("" if pd.isna(label.strip()) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['label'] == str(label.strip())][0]['id'])
+                            cFieldLabelValue.append("" if pd.isna(label.strip()) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['label'] == str(label.strip())][0]['id'])              
+                    
                     # for drop_down Type
                     if cfDropdownList['field']['existing_from_cf']['type'] == "drop_down":
                         cFieldDDValue = "" if pd.isna(importFile[cFieldDD['header_name_on_excel']][row]) else [item for item in cfDropdownList['field']['existing_from_cf']['type_config']['options'] if item['name'] == str(importFile[cFieldDD['header_name_on_excel']][row])][0]['orderindex']
                 else:
                     logFile.write(f"[ROW #{str(row)}]: It seems like the {str(cFieldDD['header_name_on_excel'])} is not existing on the excel as a header. We're gonna CFID:{str(cFieldDD['cf_id'])} as EMPTY.\n")
                     pass
-
-                # for drop_down
-                # getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
+                
+                # for drop_down getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
                 if cFieldDDValue:
                      # push
                     cfPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldDDValue})
-               
-                # for label
+            
+                # for label getting error {'err': 'Value must be an option index or uuid', 'ECODE': 'FIELD_011'} to prevent just don't push as part of the payload
                 if cFieldLabelValue:
                      # push
                     cfPayload.append({"id": str(cFieldDD['cf_id']), "value": cFieldLabelValue})
-  
+
             # format custom field link!!!
             for cField in configFile['custom_field_link']:
                     try:
